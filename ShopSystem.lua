@@ -1,4 +1,4 @@
--- ShopSystem.lua (UPDATED VERSION with Number Formatting)
+-- ShopSystem.lua (FIXED VERSION - Resolves new player upgrade issues)
 -- Place this script in ServerScriptService
 
 local Players = game:GetService("Players")
@@ -6,7 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DataStoreService = game:GetService("DataStoreService")
 
 -- Import the NumberFormatter module
-local NumberFormatter = ReplicatedStorage:WaitForChild("NumberFormatter")
+local NumberFormatter = require(ReplicatedStorage:WaitForChild("NumberFormatter"))
 
 -- Create DataStore for shop upgrades
 local shopDataStore = DataStoreService:GetDataStore("ShopUpgrades")
@@ -31,6 +31,7 @@ local SHOP_CONFIG = {
 
 -- Player data tracking
 local playerUpgrades = {}
+local playersInitialized = {} -- Track which players have been fully initialized
 
 -- Function to calculate cost for next level
 local function calculateCost(powerupType, currentLevel)
@@ -123,99 +124,131 @@ local function applySpeedUpgrade(player)
 	print("DEBUG: " .. player.Name .. " speed set to " .. newSpeed .. " (Level " .. currentLevel .. ")")
 end
 
--- FIXED: Remove ALL existing GUIs first, then create fresh ones
-local function clearAllShopGUIs(part)
-	-- Remove all BillboardGuis and SurfaceGuis
-	for _, child in pairs(part:GetChildren()) do
-		if child:IsA("BillboardGui") or child:IsA("SurfaceGui") then
-			print("DEBUG: Removing old GUI: " .. child.Name)
-			child:Destroy()
+-- FIXED: Remove ALL existing GUIs for a specific player
+local function clearPlayerShopGUIs(player)
+	for powerupType, config in pairs(SHOP_CONFIG) do
+		local part = workspace:FindFirstChild(config.partName)
+		if part then
+			local playerGui = part:FindFirstChild("ShopGUI_" .. player.Name .. "_" .. powerupType)
+			if playerGui then
+				print("DEBUG: Removing old GUI for " .. player.Name .. " - " .. powerupType)
+				playerGui:Destroy()
+			end
 		end
 	end
 end
 
--- Create individual BillboardGui for each player (visible to all but shows personal price)
+-- FIXED: Create individual BillboardGui for each player with better error handling
 local function createPersonalShopGUI(player, powerupType)
 	local config = SHOP_CONFIG[powerupType]
 	local part = workspace:FindFirstChild(config.partName)
 	if not part then 
 		warn("DEBUG: Could not find part: " .. config.partName)
-		return 
+		return nil
 	end
 
-	-- Create a BillboardGui that shows this player's personal price
-	local billboardGui = Instance.new("BillboardGui")
-	billboardGui.Name = "ShopGUI_" .. player.Name .. "_" .. powerupType
-	billboardGui.Size = UDim2.new(4, 0, 2, 0)
-	billboardGui.StudsOffset = Vector3.new(0, 3, 0)
-	billboardGui.Parent = part
+	-- Remove any existing GUI for this player first
+	local existingGui = part:FindFirstChild("ShopGUI_" .. player.Name .. "_" .. powerupType)
+	if existingGui then
+		existingGui:Destroy()
+		wait(0.1) -- Small delay to ensure cleanup
+	end
 
-	-- Create background frame
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(1, 0, 1, 0)
-	frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-	frame.BackgroundTransparency = 0.3
-	frame.BorderSizePixel = 0
-	frame.Parent = billboardGui
+	local success, gui = pcall(function()
+		-- Create a BillboardGui that shows this player's personal price
+		local billboardGui = Instance.new("BillboardGui")
+		billboardGui.Name = "ShopGUI_" .. player.Name .. "_" .. powerupType
+		billboardGui.Size = UDim2.new(4, 0, 2, 0)
+		billboardGui.StudsOffset = Vector3.new(0, 3, 0)
+		billboardGui.Parent = part
 
-	-- Add corner rounding
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = frame
+		-- Create background frame
+		local frame = Instance.new("Frame")
+		frame.Size = UDim2.new(1, 0, 1, 0)
+		frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+		frame.BackgroundTransparency = 0.3
+		frame.BorderSizePixel = 0
+		frame.Parent = billboardGui
 
-	-- Create title label
-	local titleLabel = Instance.new("TextLabel")
-	titleLabel.Name = "Title"
-	titleLabel.Size = UDim2.new(0.9, 0, 0.4, 0)
-	titleLabel.Position = UDim2.new(0.05, 0, 0.05, 0)
-	titleLabel.BackgroundTransparency = 1
-	titleLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-	titleLabel.TextScaled = true
-	titleLabel.Font = Enum.Font.SourceSansBold
-	titleLabel.Text = powerupType .. " Upgrade"
-	titleLabel.Parent = frame
+		-- Add corner rounding
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 10)
+		corner.Parent = frame
 
-	-- Create price label
-	local priceLabel = Instance.new("TextLabel")
-	priceLabel.Name = "Price"
-	priceLabel.Size = UDim2.new(0.9, 0, 0.4, 0)
-	priceLabel.Position = UDim2.new(0.05, 0, 0.5, 0)
-	priceLabel.BackgroundTransparency = 1
-	priceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	priceLabel.TextScaled = true
-	priceLabel.Font = Enum.Font.SourceSansBold
-	priceLabel.Parent = frame
+		-- Create title label
+		local titleLabel = Instance.new("TextLabel")
+		titleLabel.Name = "Title"
+		titleLabel.Size = UDim2.new(0.9, 0, 0.4, 0)
+		titleLabel.Position = UDim2.new(0.05, 0, 0.05, 0)
+		titleLabel.BackgroundTransparency = 1
+		titleLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+		titleLabel.TextScaled = true
+		titleLabel.Font = Enum.Font.SourceSansBold
+		titleLabel.Text = powerupType .. " Upgrade"
+		titleLabel.Parent = frame
 
-	print("DEBUG: Created GUI for " .. player.Name .. " - " .. powerupType)
-	return priceLabel
+		-- Create price label
+		local priceLabel = Instance.new("TextLabel")
+		priceLabel.Name = "Price"
+		priceLabel.Size = UDim2.new(0.9, 0, 0.4, 0)
+		priceLabel.Position = UDim2.new(0.05, 0, 0.5, 0)
+		priceLabel.BackgroundTransparency = 1
+		priceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		priceLabel.TextScaled = true
+		priceLabel.Font = Enum.Font.SourceSansBold
+		priceLabel.Text = "Loading..."
+		priceLabel.Parent = frame
+
+		return billboardGui
+	end)
+
+	if success and gui then
+		print("DEBUG: Successfully created GUI for " .. player.Name .. " - " .. powerupType)
+		return gui
+	else
+		warn("DEBUG: Failed to create GUI for " .. player.Name .. " - " .. powerupType .. ": " .. tostring(gui))
+		return nil
+	end
 end
 
--- Update price for specific player (NOW WITH FORMATTING!)
+-- FIXED: Update price for specific player with better validation
 local function updatePlayerShopPrice(player, powerupType)
+	-- Validate player still exists
+	if not player or not player.Parent then
+		return
+	end
+
 	local config = SHOP_CONFIG[powerupType]
 	if not config then return end
 
 	local part = workspace:FindFirstChild(config.partName)
-	if not part then return end
+	if not part then 
+		warn("DEBUG: Part not found: " .. config.partName)
+		return 
+	end
 
 	-- Find this player's personal GUI
 	local playerGui = part:FindFirstChild("ShopGUI_" .. player.Name .. "_" .. powerupType)
 	if not playerGui then
 		print("DEBUG: GUI not found for " .. player.Name .. " - " .. powerupType .. ", creating new one")
-		createPersonalShopGUI(player, powerupType)
-		playerGui = part:FindFirstChild("ShopGUI_" .. player.Name .. "_" .. powerupType)
-	end
-
-	if not playerGui then 
-		warn("DEBUG: Still couldn't create GUI for " .. player.Name .. " - " .. powerupType)
-		return 
+		playerGui = createPersonalShopGUI(player, powerupType)
+		if not playerGui then
+			warn("DEBUG: Failed to create GUI for " .. player.Name .. " - " .. powerupType)
+			return
+		end
 	end
 
 	local frame = playerGui:FindFirstChild("Frame")
-	if not frame then return end
+	if not frame then 
+		warn("DEBUG: Frame not found in GUI for " .. player.Name .. " - " .. powerupType)
+		return 
+	end
 
 	local priceLabel = frame:FindFirstChild("Price")
-	if not priceLabel then return end
+	if not priceLabel then 
+		warn("DEBUG: Price label not found in GUI for " .. player.Name .. " - " .. powerupType)
+		return 
+	end
 
 	local playerLevel = getPlayerLevel(player, powerupType)
 
@@ -238,6 +271,14 @@ end
 
 -- Function to handle powerup purchase
 local function purchasePowerup(player, powerupType)
+	-- Validate player is properly initialized
+	if not playersInitialized[player.UserId] then
+		print("DEBUG: " .. player.Name .. " not fully initialized yet, attempting purchase...")
+		-- Try to initialize them quickly
+		initializePlayerShop(player)
+		wait(0.5) -- Give it a moment
+	end
+
 	local config = SHOP_CONFIG[powerupType]
 	if not config then
 		warn("Invalid powerup type: " .. powerupType)
@@ -306,9 +347,6 @@ local function setupPartConnection(powerupType)
 		return
 	end
 
-	-- Clear any existing GUIs on this part
-	clearAllShopGUIs(part)
-
 	-- Connect touch event
 	part.Touched:Connect(function(hit)
 		local character = hit.Parent
@@ -325,64 +363,110 @@ local function setupPartConnection(powerupType)
 	print("Shop part connected: " .. config.partName)
 end
 
--- Function to initialize player upgrades when they join
-local function onPlayerAdded(player)
-	-- Wait for leaderstats to be created
-	player:WaitForChild("leaderstats")
-
+-- NEW: Separate function to initialize player shop data and GUIs
+local function initializePlayerShop(player)
+	print("DEBUG: Initializing shop for " .. player.Name)
+	
 	-- Load player upgrade data from DataStore
 	loadPlayerUpgrades(player)
-
-	-- Wait a moment for data to load, then create personal shop GUIs
-	wait(1)
+	
+	-- Clear any existing GUIs for this player
+	clearPlayerShopGUIs(player)
+	
+	-- Create personal shop GUIs for each powerup
 	for powerupType, _ in pairs(SHOP_CONFIG) do
-		createPersonalShopGUI(player, powerupType)
-		updatePlayerShopPrice(player, powerupType)
+		local gui = createPersonalShopGUI(player, powerupType)
+		if gui then
+			-- Small delay then update the price
+			spawn(function()
+				wait(0.2)
+				updatePlayerShopPrice(player, powerupType)
+			end)
+		else
+			warn("DEBUG: Failed to create GUI for " .. player.Name .. " - " .. powerupType)
+		end
 	end
+	
+	-- Mark player as initialized
+	playersInitialized[player.UserId] = true
+	print("DEBUG: Shop initialization completed for " .. player.Name)
+end
 
-	-- Wait for character to spawn, then apply upgrades
+-- FIXED: Function to initialize player upgrades when they join
+local function onPlayerAdded(player)
+	print("DEBUG: Player " .. player.Name .. " joined, waiting for leaderstats...")
+	
+	-- Wait for leaderstats to be created
+	local leaderstats = player:WaitForChild("leaderstats", 30)
+	if not leaderstats then
+		warn("DEBUG: Leaderstats timeout for " .. player.Name)
+		return
+	end
+	
+	-- Wait for Coins to be created
+	local coins = leaderstats:WaitForChild("Coins", 10)
+	if not coins then
+		warn("DEBUG: Coins timeout for " .. player.Name)
+		return
+	end
+	
+	print("DEBUG: Leaderstats ready for " .. player.Name)
+	
+	-- Initialize shop after a short delay
+	spawn(function()
+		wait(2) -- Give time for everything to settle
+		initializePlayerShop(player)
+	end)
+
+	-- Handle character spawning
 	player.CharacterAdded:Connect(function(character)
 		wait(1) -- Small delay to ensure character is fully loaded
-		applySpeedUpgrade(player)
-		-- Update shop prices when character spawns
-		for powerupType, _ in pairs(SHOP_CONFIG) do
-			updatePlayerShopPrice(player, powerupType)
+		if playersInitialized[player.UserId] then
+			applySpeedUpgrade(player)
+			-- Refresh shop prices
+			for powerupType, _ in pairs(SHOP_CONFIG) do
+				updatePlayerShopPrice(player, powerupType)
+			end
+		else
+			-- If not initialized, do it now
+			initializePlayerShop(player)
+			wait(1)
+			applySpeedUpgrade(player)
 		end
 	end)
 
 	-- If character already exists
 	if player.Character then
-		wait(1)
-		applySpeedUpgrade(player)
-		-- Update shop prices for existing character
-		for powerupType, _ in pairs(SHOP_CONFIG) do
-			updatePlayerShopPrice(player, powerupType)
-		end
+		spawn(function()
+			wait(3) -- Wait for shop initialization
+			if playersInitialized[player.UserId] then
+				applySpeedUpgrade(player)
+			end
+		end)
 	end
 end
 
 -- Function to save player data when they leave
 local function onPlayerRemoving(player)
+	print("DEBUG: Player " .. player.Name .. " leaving, cleaning up...")
+	
 	-- Clean up personal shop GUIs
-	for powerupType, config in pairs(SHOP_CONFIG) do
-		local part = workspace:FindFirstChild(config.partName)
-		if part then
-			local playerGui = part:FindFirstChild("ShopGUI_" .. player.Name .. "_" .. powerupType)
-			if playerGui then
-				playerGui:Destroy()
-			end
-		end
-	end
+	clearPlayerShopGUIs(player)
 
 	-- Save upgrade data to DataStore
 	savePlayerUpgrades(player)
 
 	-- Clean up memory
 	playerUpgrades[player.UserId] = nil
+	playersInitialized[player.UserId] = nil
+	
+	print("DEBUG: Cleanup completed for " .. player.Name)
 end
 
 -- Initialize the shop system
 local function initializeShop()
+	print("DEBUG: Initializing Shop System...")
+	
 	-- Setup part connections for all powerups
 	for powerupType, config in pairs(SHOP_CONFIG) do
 		setupPartConnection(powerupType)
@@ -394,7 +478,9 @@ local function initializeShop()
 
 	-- Handle players already in game
 	for _, player in pairs(Players:GetPlayers()) do
-		onPlayerAdded(player)
+		spawn(function()
+			onPlayerAdded(player)
+		end)
 	end
 
 	print("DEBUG: Shop System initialized with formatted prices!")
@@ -422,5 +508,24 @@ _G.ShopSystem = {
 	calculateCost = calculateCost,
 	purchasePowerup = purchasePowerup,
 	savePlayerUpgrades = savePlayerUpgrades,
-	getPlayerStudMultiplier = getPlayerStudMultiplier
+	getPlayerStudMultiplier = getPlayerStudMultiplier,
+	-- NEW: Manual refresh function for debugging
+	refreshPlayerShop = function(player)
+		if player and player.Parent then
+			initializePlayerShop(player)
+		end
+	end
 }
+
+-- Debug command to refresh all shops
+_G.RefreshAllShops = function()
+	for _, player in pairs(Players:GetPlayers()) do
+		if player.leaderstats then
+			initializePlayerShop(player)
+		end
+	end
+	print("DEBUG: Refreshed all player shops")
+end
+
+print("DEBUG: Shop System loaded successfully!")
+print("DEBUG: Use _G.RefreshAllShops() to manually refresh all shops if needed")
