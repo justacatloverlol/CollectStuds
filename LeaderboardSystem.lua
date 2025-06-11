@@ -1,4 +1,4 @@
--- LeaderboardSystem.lua
+-- LeaderboardSystem.lua (FIXED VERSION)
 -- Place this script in ServerScriptService
 
 local Players = game:GetService("Players")
@@ -10,13 +10,12 @@ local NumberFormatter = ReplicatedStorage:WaitForChild("NumberFormatter")
 
 -- Configuration
 local LEADERBOARD_SIZE = 10 -- Show top 10 players
-local UPDATE_INTERVAL = 5 -- 5 minutes in seconds
+local UPDATE_INTERVAL = 5 -- 5 seconds for testing (change to 300 for 5 minutes)
 local LEADERBOARD_PART_COINS = "LeaderboardCoins" -- Name of the part for coins leaderboard
 local LEADERBOARD_PART_STUDS = "LeaderboardStuds" -- Name of the part for studs leaderboard
 
 -- Variables
 local lastUpdateTime = 0
-local leaderboardGUIs = {}
 
 -- Function to get all player data sorted by specified stat
 local function getLeaderboardData(statType)
@@ -65,10 +64,14 @@ end
 
 -- Function to create leaderboard GUI
 local function createLeaderboardGUI(part, statType, title)
+	print("🔨 Creating leaderboard GUI for " .. title)
+	
 	-- Remove existing GUI if it exists
 	local existingGUI = part:FindFirstChild("LeaderboardGUI")
 	if existingGUI then
+		print("🗑️ Removing existing GUI")
 		existingGUI:Destroy()
+		wait(0.1) -- Small delay to ensure cleanup
 	end
 
 	-- Create new GUI
@@ -79,6 +82,7 @@ local function createLeaderboardGUI(part, statType, title)
 
 	-- Create main frame
 	local mainFrame = Instance.new("Frame")
+	mainFrame.Name = "MainFrame"
 	mainFrame.Size = UDim2.new(1, 0, 1, 0)
 	mainFrame.Position = UDim2.new(0, 0, 0, 0)
 	mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
@@ -117,16 +121,19 @@ local function createLeaderboardGUI(part, statType, title)
 	scrollFrame.ScrollBarThickness = 8
 	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(255, 215, 0)
 	scrollFrame.BorderSizePixel = 0
+	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0) -- Will be updated dynamically
 	scrollFrame.Parent = mainFrame
 
 	-- Create UI list layout for entries
 	local listLayout = Instance.new("UIListLayout")
+	listLayout.Name = "ListLayout"
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout.Padding = UDim.new(0, 2)
 	listLayout.Parent = scrollFrame
 
 	-- Create padding for scroll frame
 	local padding = Instance.new("UIPadding")
+	padding.Name = "Padding"
 	padding.PaddingTop = UDim.new(0, 10)
 	padding.PaddingBottom = UDim.new(0, 10)
 	padding.PaddingLeft = UDim.new(0, 10)
@@ -139,18 +146,27 @@ end
 
 -- Function to update leaderboard entries
 local function updateLeaderboardEntries(gui, leaderboardData, statType)
+	print("🔄 Updating leaderboard entries with " .. #leaderboardData .. " players")
+	
 	local scrollFrame = gui:FindFirstChild("ScrollFrame")
-	if not scrollFrame then return end
+	if not scrollFrame then 
+		warn("❌ ScrollFrame not found!")
+		return 
+	end
 
-	-- Clear existing entries
+	-- FIXED: Only remove entry frames, keep layout and padding
 	for _, child in pairs(scrollFrame:GetChildren()) do
 		if child:IsA("Frame") and child.Name:match("Entry") then
 			child:Destroy()
 		end
 	end
 
+	print("🧹 Cleared old entries, creating " .. #leaderboardData .. " new entries")
+
 	-- Create new entries
 	for i, playerData in ipairs(leaderboardData) do
+		print("👤 Creating entry " .. i .. " for " .. playerData.name .. " with " .. playerData.value .. " " .. statType)
+		
 		local entry = Instance.new("Frame")
 		entry.Name = "Entry" .. i
 		entry.Size = UDim2.new(1, -20, 0, 40)
@@ -213,10 +229,16 @@ local function updateLeaderboardEntries(gui, leaderboardData, statType)
 			crownLabel.TextScaled = true
 			crownLabel.Parent = entry
 		end
+
+		print("✅ Created entry for " .. playerData.name)
 	end
 
 	-- Update scroll frame canvas size
-	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, #leaderboardData * 42 + 20)
+	local totalHeight = #leaderboardData * 42 + 20
+	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
+	
+	print("📏 Updated canvas size to " .. totalHeight .. " pixels")
+	print("✅ Finished updating leaderboard entries")
 end
 
 -- Function to update all leaderboards
@@ -242,8 +264,12 @@ local function updateLeaderboards()
 			coinsGUI = createLeaderboardGUI(coinsPart, "Coins", "🪙 TOP COINS LEADERBOARD 🪙")
 		end
 
-		updateLeaderboardEntries(coinsGUI, coinsData, "Coins")
-		print("✅ Updated Coins leaderboard with " .. #coinsData .. " players")
+		if coinsGUI then
+			updateLeaderboardEntries(coinsGUI, coinsData, "Coins")
+			print("✅ Updated Coins leaderboard with " .. #coinsData .. " players")
+		else
+			warn("❌ Failed to create Coins GUI")
+		end
 	else
 		warn("⚠️ CRITICAL: Coins leaderboard part '" .. LEADERBOARD_PART_COINS .. "' not found in workspace!")
 		print("💡 Create a part in workspace named exactly: " .. LEADERBOARD_PART_COINS)
@@ -259,8 +285,12 @@ local function updateLeaderboards()
 			studsGUI = createLeaderboardGUI(studsPart, "Studs", "💎 TOP STUDS LEADERBOARD 💎")
 		end
 
-		updateLeaderboardEntries(studsGUI, studsData, "Studs")
-		print("✅ Updated Studs leaderboard with " .. #studsData .. " players")
+		if studsGUI then
+			updateLeaderboardEntries(studsGUI, studsData, "Studs")
+			print("✅ Updated Studs leaderboard with " .. #studsData .. " players")
+		else
+			warn("❌ Failed to create Studs GUI")
+		end
 	else
 		warn("⚠️ CRITICAL: Studs leaderboard part '" .. LEADERBOARD_PART_STUDS .. "' not found in workspace!")
 		print("💡 Create a part in workspace named exactly: " .. LEADERBOARD_PART_STUDS)
@@ -299,7 +329,7 @@ local function initializeLeaderboards()
 	updateLeaderboards()
 
 	print("✅ Leaderboard System initialized!")
-	print("📊 Leaderboards will update every " .. (UPDATE_INTERVAL / 60) .. " minutes")
+	print("📊 Leaderboards will update every " .. (UPDATE_INTERVAL) .. " seconds")
 	print("🎯 Looking for parts: '" .. LEADERBOARD_PART_COINS .. "' and '" .. LEADERBOARD_PART_STUDS .. "'")
 end
 
@@ -316,7 +346,7 @@ end)
 -- Start the system
 initializeLeaderboards()
 
--- Manual update function for testing (remove in production)
+-- Manual update function for testing
 _G.UpdateLeaderboards = updateLeaderboards
 
 print("📋 Leaderboard System loaded successfully!")
