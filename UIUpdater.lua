@@ -1,8 +1,12 @@
--- UIUpdater.lua
+-- UIUpdater.lua (UPDATED VERSION)
 -- Place this LocalScript in StarterGui (NOT ServerScriptService)
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
+
+-- Import the NumberFormatter module
+local NumberFormatter = ReplicatedStorage:WaitForChild("NumberFormatter")
 
 -- Wait for the player's leaderstats to be created
 local leaderstats = player:WaitForChild("leaderstats")
@@ -16,10 +20,10 @@ local studFrame = screenGui:WaitForChild("StudFrame")
 local coinsLabel = coinFrame:WaitForChild("CoinsLabel")
 local studsLabel = studFrame:WaitForChild("StudsLabel")
 
--- Function to update the UI
+-- Function to update the UI with formatted numbers
 local function updateUI()
-	coinsLabel.Text = "Coins: " .. tostring(coins.Value)
-	studsLabel.Text = "Studs: " .. tostring(studs.Value)
+	coinsLabel.Text = "Coins: " .. NumberFormatter.formatNumber(coins.Value)
+	studsLabel.Text = "Studs: " .. NumberFormatter.formatNumber(studs.Value)
 end
 
 -- Update UI immediately
@@ -29,4 +33,7 @@ updateUI()
 coins.Changed:Connect(updateUI)
 studs.Changed:Connect(updateUI)
 
-print("UI Updater initialized for " .. player.Name)
+print("UI Updater initialized for " .. player.Name .. " with number formatting!")
+
+-- Optional: Test the formatter (remove this in production)
+-- NumberFormatter.test()
