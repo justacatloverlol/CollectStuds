@@ -1,39 +1,101 @@
--- UIUpdater.lua (UPDATED VERSION)
--- Place this LocalScript in StarterGui (NOT ServerScriptService)
+-- UIUpdater.lua (FIXED VERSION)
+-- Place this LocalScript in StarterGui
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 
+print("🔄 UIUpdater starting for " .. player.Name)
+
 -- Import the NumberFormatter module
-local NumberFormatter = ReplicatedStorage:WaitForChild("NumberFormatter")
+local NumberFormatter
+local success, err = pcall(function()
+	NumberFormatter = require(ReplicatedStorage:WaitForChild("NumberFormatter"))
+end)
+
+if not success then
+	warn("❌ Failed to load NumberFormatter: " .. tostring(err))
+	return
+end
+
+print("✅ NumberFormatter loaded successfully")
 
 -- Wait for the player's leaderstats to be created
-local leaderstats = player:WaitForChild("leaderstats")
-local studs = leaderstats:WaitForChild("Studs")
-local coins = leaderstats:WaitForChild("Coins")
+local leaderstats = player:WaitForChild("leaderstats", 30)
+if not leaderstats then
+	warn("❌ Leaderstats not found for " .. player.Name)
+	return
+end
+
+local studs = leaderstats:WaitForChild("Studs", 10)
+local coins = leaderstats:WaitForChild("Coins", 10)
+
+if not studs or not coins then
+	warn("❌ Studs or Coins not found in leaderstats")
+	return
+end
+
+print("✅ Leaderstats found - Studs: " .. studs.Value .. ", Coins: " .. coins.Value)
 
 -- Wait for the UI elements
-local screenGui = script.Parent -- The script is already inside ScreenGui
-local coinFrame = screenGui:WaitForChild("CoinFrame")
-local studFrame = screenGui:WaitForChild("StudFrame")
-local coinsLabel = coinFrame:WaitForChild("CoinsLabel")
-local studsLabel = studFrame:WaitForChild("StudsLabel")
+local playerGui = player:WaitForChild("PlayerGui")
+local screenGui = playerGui:WaitForChild("ScreenGui", 10)
+
+if not screenGui then
+	warn("❌ ScreenGui not found")
+	return
+end
+
+local coinFrame = screenGui:WaitForChild("CoinFrame", 5)
+local studFrame = screenGui:WaitForChild("StudFrame", 5)
+
+if not coinFrame or not studFrame then
+	warn("❌ CoinFrame or StudFrame not found")
+	return
+end
+
+local coinsLabel = coinFrame:WaitForChild("CoinsLabel", 5)
+local studsLabel = studFrame:WaitForChild("StudsLabel", 5)
+
+if not coinsLabel or not studsLabel then
+	warn("❌ CoinsLabel or StudsLabel not found")
+	return
+end
+
+print("✅ UI elements found successfully")
 
 -- Function to update the UI with formatted numbers
 local function updateUI()
-	coinsLabel.Text = "Coins: " .. NumberFormatter.formatNumber(coins.Value)
-	studsLabel.Text = "Studs: " .. NumberFormatter.formatNumber(studs.Value)
+	local formattedCoins = NumberFormatter.formatNumber(coins.Value)
+	local formattedStuds = NumberFormatter.formatNumber(studs.Value)
+
+	coinsLabel.Text = "Coins: " .. formattedCoins
+	studsLabel.Text = "Studs: " .. formattedStuds
+
+	print("🔄 UI Updated - Coins: " .. formattedCoins .. ", Studs: " .. formattedStuds)
 end
 
 -- Update UI immediately
 updateUI()
 
 -- Connect to value changes
-coins.Changed:Connect(updateUI)
-studs.Changed:Connect(updateUI)
+local coinsConnection = coins.Changed:Connect(function(newValue)
+	print("💰 Coins changed to: " .. newValue)
+	updateUI()
+end)
 
-print("UI Updater initialized for " .. player.Name .. " with number formatting!")
+local studsConnection = studs.Changed:Connect(function(newValue)
+	print("💎 Studs changed to: " .. newValue)
+	updateUI()
+end)
 
--- Optional: Test the formatter (remove this in production)
--- NumberFormatter.test()
+print("✅ UI Updater initialized successfully for " .. player.Name)
+
+-- Clean up connections when player leaves
+player.AncestryChanged:Connect(function()
+	if not player.Parent then
+		coinsConnection:Disconnect()
+		studsConnection:Disconnect()
+		print("🧹 UI Updater connections cleaned up")
+	end
+end)
