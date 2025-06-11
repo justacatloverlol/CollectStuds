@@ -1,9 +1,12 @@
--- ShopSystem.lua (DEBUG VERSION)
+-- ShopSystem.lua (UPDATED VERSION with Number Formatting)
 -- Place this script in ServerScriptService
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DataStoreService = game:GetService("DataStoreService")
+
+-- Import the NumberFormatter module
+local NumberFormatter = ReplicatedStorage:WaitForChild("NumberFormatter")
 
 -- Create DataStore for shop upgrades
 local shopDataStore = DataStoreService:GetDataStore("ShopUpgrades")
@@ -187,7 +190,7 @@ local function createPersonalShopGUI(player, powerupType)
 	return priceLabel
 end
 
--- Update price for specific player
+-- Update price for specific player (NOW WITH FORMATTING!)
 local function updatePlayerShopPrice(player, powerupType)
 	local config = SHOP_CONFIG[powerupType]
 	if not config then return end
@@ -226,9 +229,10 @@ local function updatePlayerShopPrice(player, powerupType)
 	else
 		-- Calculate next upgrade cost for this specific player
 		local nextCost = calculateCost(powerupType, playerLevel)
-		priceLabel.Text = nextCost .. " Coins"
+		-- FORMAT THE PRICE HERE!
+		priceLabel.Text = NumberFormatter.formatNumber(nextCost) .. " Coins"
 		priceLabel.TextColor3 = Color3.fromRGB(255, 255, 255) -- White color
-		print("DEBUG: " .. player.Name .. " next " .. powerupType .. " cost: " .. nextCost)
+		print("DEBUG: " .. player.Name .. " next " .. powerupType .. " cost: " .. NumberFormatter.formatNumber(nextCost))
 	end
 end
 
@@ -259,11 +263,11 @@ local function purchasePowerup(player, powerupType)
 	local cost = calculateCost(powerupType, currentLevel)
 	local playerCoins = player.leaderstats.Coins.Value
 
-	print("DEBUG: Cost: " .. cost .. ", Player has: " .. playerCoins)
+	print("DEBUG: Cost: " .. NumberFormatter.formatNumber(cost) .. ", Player has: " .. NumberFormatter.formatNumber(playerCoins))
 
 	-- Check if player has enough coins
 	if playerCoins < cost then
-		print("DEBUG: " .. player.Name .. " doesn't have enough coins. Need: " .. cost .. ", Has: " .. playerCoins)
+		print("DEBUG: " .. player.Name .. " doesn't have enough coins. Need: " .. NumberFormatter.formatNumber(cost) .. ", Has: " .. NumberFormatter.formatNumber(playerCoins))
 		return false
 	end
 
@@ -393,7 +397,7 @@ local function initializeShop()
 		onPlayerAdded(player)
 	end
 
-	print("DEBUG: Shop System initialized with individual player GUIs!")
+	print("DEBUG: Shop System initialized with formatted prices!")
 end
 
 -- Auto-save upgrades every 5 minutes
